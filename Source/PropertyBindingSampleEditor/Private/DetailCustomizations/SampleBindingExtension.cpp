@@ -12,143 +12,153 @@
 
 bool FSampleBindingExtension::IsPropertyExtendable(const UClass* InObjectClass, const IPropertyHandle& PropertyHandle) const
 {
-	if (PropertyHandle.GetMetaData("Category").Equals(TEXT("TestBinding")))
+	if (!PropertyHandle.GetProperty()) 
+	{
+		return false;
+	}
+	if (FindFProperty<FProperty>(InObjectClass, FName(*(PropertyHandle.GetProperty()->GetName() + TEXT("BindingData")))))
 	{
 		return true;
 	}
 	return false;
 }
 
-void FSampleBindingExtension::ExtendWidgetRow(FDetailWidgetRow& InWidgetRow, const IDetailLayoutBuilder& InDetailBuilder, const UClass* InObjectClass, TSharedPtr<IPropertyHandle> InPropertyHandle)
+void FSampleBindingExtension::ExtendWidgetRow(FDetailWidgetRow& InWidgetRow, const IDetailLayoutBuilder& InDetailBuilder, const UClass* InObjectClass, TSharedPtr<IPropertyHandle> PropertyHandle)
 {
-	if (!IModularFeatures::Get().IsModularFeatureAvailable("PropertyAccessEditor"))
+    if (!IModularFeatures::Get().IsModularFeatureAvailable("PropertyAccessEditor"))
+    {
+        return;
+    }
+	
+    IPropertyAccessEditor& PropertyAccessEditor = IModularFeatures::Get().GetModularFeature<IPropertyAccessEditor>("PropertyAccessEditor");
+	
+    TArray<UObject*> OuterObjects;
+    PropertyHandle->GetOuterObjects(OuterObjects);
+    if (OuterObjects.Num() != 1)
+    {
+		return;
+    }
+	
+	USampleBindingObject* SampleBindingObject =Cast<USampleBindingObject>(OuterObjects[0]);
+    if (SampleBindingObject == nullptr || !SampleBindingObject->Parameters.IsValid())
+    {
+	    return;
+    }
+
+	// TODO: Changed this to get real InstancedPropertyBag params.
+	const FInstancedPropertyBag& PropertyBag = SampleBindingObject->Parameters;
+
+	if (!PropertyHandle->GetProperty()) 
 	{
 		return;
 	}
+	const FProperty* BindingDataProperty = FindFProperty<FProperty>(InObjectClass, FName(*(PropertyHandle->GetProperty()->GetName() + TEXT("BindingData"))));
+	if (BindingDataProperty == nullptr)
+	{
+		return;
+	}
+	void* BindingDataAddress = BindingDataProperty->ContainerPtrToValuePtr<void>(SampleBindingObject);
+	if (BindingDataAddress == nullptr)
+	{
+		return;
+	}
+	if (CastField<FStructProperty>(BindingDataProperty) == nullptr)
+	{
+		return;
+	}
+	FSampleBindingData* SampleBindingData = static_cast<FSampleBindingData*>(BindingDataAddress);
 
-	IPropertyAccessEditor& PropertyAccessEditor = IModularFeatures::Get().GetModularFeature<IPropertyAccessEditor>("PropertyAccessEditor");
-	// Array of structs we can bind to.
+	const FText DisplayText = FText::FromString(TEXT("Parameters"));
+	const FString CategoryStr = TEXT("TestCategory");
+	const FText SectionText = FText::FromString(TEXT("Global"));
 	TArray<FBindingContextStruct> BindingContextStructs;
+	FBindingContextStruct& ContextStruct = BindingContextStructs.AddDefaulted_GetRef();
+	ContextStruct.DisplayText = DisplayText;
+	const UStruct* Struct = PropertyBag.GetPropertyBagStruct();
+	ContextStruct.Struct = const_cast<UStruct*>(Struct);
+	// ContextStruct.Category = CategoryStr;
+	ContextStruct.Section = SectionText;
+	ContextStruct.Color = FLinearColor::MakeRandomColor();
 
-	TArray<UObject*> OuterObjects;
-	InPropertyHandle->GetOuterObjects(OuterObjects);
-	if (OuterObjects.Num() == 1)
+    FPropertyBindingWidgetArgs Args;
+    Args.OnGenerateBindingName = FOnGenerateBindingName::CreateLambda([]() -> FString { return TEXT("NewBinding"); });
+    Args.OnCanBindPropertyWithBindingChain = FOnCanBindPropertyWithBindingChain::CreateLambda([PropertyHandle](FProperty* InProperty, TConstArrayView<FBindingChainElement> InBindingChain)
+    {
+	    if (InProperty == nullptr || InBindingChain.IsEmpty())
+	    {
+		    return true;
+	    }
+		IPropertyAccessEditor& PropertyAccessEditor = IModularFeatures::Get().GetModularFeature<IPropertyAccessEditor>("PropertyAccessEditor");
+		const FProperty* BindingProperty = PropertyHandle->GetProperty();
+    	const bool Result = BindingProperty && PropertyAccessEditor.GetPropertyCompatibility(InProperty, BindingProperty) != EPropertyAccessCompatibility::Incompatible;
+		return Result;
+    });
+    Args.OnCanBindToClass = FOnCanBindToClass::CreateLambda([](UClass* InClass) { return true; });
+	Args.OnAddBinding = FOnAddBinding::CreateLambda([SampleBindingData, PropertyBag, PropertyHandle](const FName& InPropertyName, const TArray<FBindingChainElement>& InBindingChain)
 	{
-		const FText DisplayText = FText::FromString(TEXT("Parameters"));
-		const FString CategoryStr = TEXT("TestCategory");
-		const FText SectionText = FText::FromString(TEXT("Global"));
+		// Binding Data
+		SampleBindingData->PropertyBag = &PropertyBag;
+		const FPropertyBagPropertyDesc* PropertyDesc = PropertyBag.FindPropertyDescByName(InBindingChain.Last().Field.GetFName());
+		SampleBindingData->PropertyDescName = PropertyDesc->Name;
+		SampleBindingData->PropertyDescValueType = PropertyDesc->ValueType;
 
-		const USampleBindingObject* SampleBindingObject = Cast<USampleBindingObject>(OuterObjects[0]);
-		if (SampleBindingObject != nullptr && SampleBindingObject->Parameters.IsValid())
-		{
-			const UStruct* Struct = SampleBindingObject->Parameters.GetPropertyBagStruct();
-			FBindingContextStruct& ContextStruct = BindingContextStructs.AddDefaulted_GetRef();
-			ContextStruct.DisplayText = DisplayText;
-			ContextStruct.Struct = const_cast<UStruct*>(Struct);
-			ContextStruct.Category = CategoryStr;
-			ContextStruct.Section = SectionText;
-			ContextStruct.Color = FLinearColor::MakeRandomColor();
-		}
-	}
+		// Image
+		static FName PropertyIcon(TEXT("Kismet.Tabs.Variables"));
+		SampleBindingData->Image = FAppStyle::GetBrush(PropertyIcon);
 
-	// Wrap value widget
-	{
-		/*auto IsValueVisible = TAttribute<EVisibility>::Create([CachedBindingData]() -> EVisibility
-		{
-			return CachedBindingData->HasBinding(FStateTreeEditorPropertyBindings::ESearchMode::Exact) ? EVisibility::Collapsed : EVisibility::Visible;
-		});*/
-
-		TSharedPtr<SWidget> ValueWidget = InWidgetRow.ValueContent().Widget;
-		InWidgetRow.ValueContent()
-		[
-			SNew(SBox)
-			.Visibility(EVisibility::Collapsed)
-			// .Visibility(IsValueVisible)
-			[
-				ValueWidget.ToSharedRef()
-			]
-		];
-	}
-
-	FPropertyBindingWidgetArgs Args;
-	Args.Property = InPropertyHandle->GetProperty();
-
-	Args.OnCanBindPropertyWithBindingChain = FOnCanBindPropertyWithBindingChain::CreateLambda([](FProperty* InProperty, TConstArrayView<FBindingChainElement> InBindingChain) {
-		return true;
+		// Color
+		const UEdGraphSchema_K2* Schema = GetDefault<UEdGraphSchema_K2>();
+		check(Schema);
+		FEdGraphPinType PinType;
+		Schema->ConvertPropertyToPinType(PropertyHandle->GetProperty(), PinType);
+		SampleBindingData->Color = Schema->GetPinTypeColor(PinType);
 	});
+    Args.OnRemoveBinding = FOnRemoveBinding::CreateLambda([SampleBindingData](FName InPropertyName)
+    {
+    	SampleBindingData->PropertyBag = nullptr;
+    	SampleBindingData->PropertyDescName = NAME_None;
+    	SampleBindingData->PropertyDescValueType = EPropertyBagPropertyType::None;
+    	SampleBindingData->Color = FLinearColor::White;
+    	SampleBindingData->Image = nullptr;
+    });
+    Args.OnCanRemoveBinding = FOnCanRemoveBinding::CreateLambda([](FName InPropertyName)
+    {
+        return true;
+    });
+    Args.CurrentBindingText = MakeAttributeLambda([SampleBindingData]()
+    {
+        return FText::FromName(SampleBindingData->PropertyDescName);
+    });
+    Args.CurrentBindingToolTipText = MakeAttributeLambda([SampleBindingData]()
+    {
+    	return FText::FromName(SampleBindingData->PropertyDescName);
+    });
+    Args.CurrentBindingImage = MakeAttributeLambda([SampleBindingData]() -> const FSlateBrush*
+    {
+	    return SampleBindingData->Image;
+    });
+    Args.CurrentBindingColor = MakeAttributeLambda([SampleBindingData]() -> FLinearColor
+    {
+		return SampleBindingData->Color;
+    });
 
-	Args.OnCanBindToContextStructWithIndex = FOnCanBindToContextStructWithIndex::CreateLambda([](const UStruct* InStruct, int32 InStructIndex) {
-		return true;
-	});
+    // Configure binding options
+    Args.bGeneratePureBindings = true; // Allow pure bindings
+    Args.bAllowFunctionBindings = false; // Disallow function bindings
+    Args.bAllowFunctionLibraryBindings = false; // Disallow function library bindings
+    Args.bAllowPropertyBindings = true; // Allow property bindings
+    Args.bAllowNewBindings = false; // Disallow creating new bindings
+    Args.bAllowArrayElementBindings = false; // Disallow array element bindings
+    Args.bAllowUObjectFunctions = false; // Disallow UObject functions
+    Args.bAllowStructFunctions = false; // Disallow struct functions
+    Args.bAllowStructMemberBindings = true; // Allow struct member bindings
 
-	Args.OnCanAcceptPropertyOrChildrenWithBindingChain = FOnCanAcceptPropertyOrChildrenWithBindingChain::CreateLambda([](FProperty* InProperty, TConstArrayView<FBindingChainElement> InBindingChain) {
-		return true;
-	});
-
-	Args.OnCanBindToClass = FOnCanBindToClass::CreateLambda([](UClass* InClass) {
-		return true;
-	});
-
-	Args.OnAddBinding = FOnAddBinding::CreateLambda([&InDetailBuilder](FName InPropertyName, TConstArrayView<FBindingChainElement> InBindingChain) {
-		InDetailBuilder.GetPropertyUtilities()->RequestForceRefresh();
-	});
-
-	Args.OnRemoveBinding = FOnRemoveBinding::CreateLambda([&InDetailBuilder](FName InPropertyName) {
-		InDetailBuilder.GetPropertyUtilities()->RequestForceRefresh();
-	});
-
-	Args.OnCanRemoveBinding = FOnCanRemoveBinding::CreateLambda([](FName InPropertyName) {
-		return true;
-	});
-
-	Args.CurrentBindingText = MakeAttributeLambda([]() {
-		return FText::FromString("TestBindingText");
-	});
-
-	Args.CurrentBindingToolTipText = MakeAttributeLambda([]() {
-		return FText::FromString("TestToolTipText");
-	});
-
-	Args.CurrentBindingImage = MakeAttributeLambda([]() -> const FSlateBrush* {
-		return FAppStyle::GetBrush("Icons.Warning");
-	});
-
-	Args.CurrentBindingColor = MakeAttributeLambda([]() -> FLinearColor {
-		return FLinearColor::Red;
-	});
-
-	Args.BindButtonStyle = &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("HoverHintOnly");
-	Args.bAllowNewBindings = false;
-	Args.bAllowArrayElementBindings = false;
-	Args.bAllowUObjectFunctions = false;
-
-	// ResetToDefault
-	/*{
-		InWidgetRow.CustomResetToDefault = FResetToDefaultOverride::Create(
-			MakeAttributeLambda([CachedBindingData, InPropertyHandle]()
-			{
-				return InPropertyHandle->CanResetToDefault() || CachedBindingData->HasBinding(FStateTreeEditorPropertyBindings::ESearchMode::Includes);
-			}),
-			FSimpleDelegate::CreateLambda([CachedBindingData, &InDetailBuilder, InPropertyHandle]()
-				{
-					if (CachedBindingData->HasBinding(FStateTreeEditorPropertyBindings::ESearchMode::Includes))
-					{
-						CachedBindingData->RemoveBinding(FStateTreeEditorPropertyBindings::ESearchMode::Includes);
-						InDetailBuilder.GetPropertyUtilities()->RequestForceRefresh();
-					}
-					if (InPropertyHandle->CanResetToDefault())
-					{
-						InPropertyHandle->ResetToDefault();
-					}
-				}),
-			false
-			);
-	}*/
-
-	InWidgetRow.ExtensionContent()
-	[
-		PropertyAccessEditor.MakePropertyBindingWidget(BindingContextStructs, Args)
-	];
+    // Customize the header row in the Details Panel to include the PropertyAccessEditor widget
+    InWidgetRow.ExtensionContent()
+    [
+        PropertyAccessEditor.MakePropertyBindingWidget(BindingContextStructs, Args)
+    ];
+	
 }
 
 #undef LOCTEXT_NAMESPACE
