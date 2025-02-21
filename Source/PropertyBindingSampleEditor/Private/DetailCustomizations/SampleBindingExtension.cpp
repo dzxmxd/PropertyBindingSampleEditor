@@ -66,6 +66,10 @@ void FSampleBindingExtension::ExtendWidgetRow(FDetailWidgetRow& InWidgetRow, con
 		return;
 	}
 	FSampleBindingData* SampleBindingData = static_cast<FSampleBindingData*>(BindingDataAddress);
+	if (SampleBindingData == nullptr)
+	{
+		return;
+	}
 
 	const FText DisplayText = FText::FromString(TEXT("Parameters"));
 	const FString CategoryStr = TEXT("TestCategory");
@@ -176,6 +180,15 @@ void FSampleBindingExtension::ExtendWidgetRow(FDetailWidgetRow& InWidgetRow, con
 	Args.bAllowStructFunctions = false;         // Disallow struct functions
 	Args.bAllowStructMemberBindings = true;     // Allow struct member bindings
 
+	TAttribute<bool> bOriginValueContentWidgetEnabled = TAttribute<bool>::Create(TAttribute<bool>::FGetter::CreateLambda([SampleBindingData]() -> bool
+	{
+		if (SampleBindingData != nullptr)
+		{
+			return !SampleBindingData->HasBinding();
+		}
+		return true;
+	}));
+	InWidgetRow.ValueContent().Widget->SetEnabled(bOriginValueContentWidgetEnabled);
 	// Customize the header row in the Details Panel to include the PropertyAccessEditor widget
 	InWidgetRow.ExtensionContent()
 	[
