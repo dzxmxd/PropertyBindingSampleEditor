@@ -47,6 +47,7 @@ public class PropertyBindingSampleEditor : ModuleRules
 				"Slate",
 				"SlateCore",
 				"BlueprintGraph", // Only used to obtain matching colors
+				"PropertyPath",
 				// ... add private dependencies that you statically link with here ...	
 			}
 		);
