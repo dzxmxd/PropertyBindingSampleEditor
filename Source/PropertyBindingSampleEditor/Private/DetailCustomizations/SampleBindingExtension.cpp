@@ -93,7 +93,7 @@ void FSampleBindingExtension::ExtendWidgetRow(FDetailWidgetRow& InWidgetRow, con
 		}
 		IPropertyAccessEditor& PropertyAccessEditor = IModularFeatures::Get().GetModularFeature<IPropertyAccessEditor>("PropertyAccessEditor");
 		const FProperty* BindingProperty = PropertyHandle->GetProperty();
-		const bool Result = BindingProperty && PropertyAccessEditor.GetPropertyCompatibility(InProperty, BindingProperty) != EPropertyAccessCompatibility::Incompatible;
+		const bool Result = BindingProperty && PropertyAccessEditor.GetPropertyCompatibility(InProperty, BindingProperty) == EPropertyAccessCompatibility::Compatible;
 		return Result;
 	});
 	Args.OnCanBindToClass = FOnCanBindToClass::CreateLambda([](UClass* InClass) { return true; });
