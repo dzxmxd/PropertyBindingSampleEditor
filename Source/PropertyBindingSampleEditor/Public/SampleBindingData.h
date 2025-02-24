@@ -1,3 +1,4 @@
+// Copyright https://github.com/dzxmxd/PropertyBindingSampleEditor
 #pragma once
 
 #include "PropertyPathHelpers.h"
@@ -8,6 +9,7 @@ USTRUCT()
 struct FSampleBindingData
 {
 	GENERATED_BODY()
+
 public:
 	static constexpr int32 FirstValidSegmentIndex = 0;
 	static constexpr int32 FirstNestSegmentIndex = 1;
@@ -20,9 +22,8 @@ public:
 	const FSlateBrush* Image = nullptr;
 
 	bool HasBinding() const;
-
-	double GetVectorValue();
-
+	void RemoveBinding();
+	FText GetBindingText() const;
 
 	template <typename T>
 	TValueOrError<T, EPropertyBagResult> GetNestedPropertyValue() const
@@ -31,7 +32,7 @@ public:
 		{
 			return MakeError(EPropertyBagResult::TypeMismatch);
 		}
-		
+
 		const FPropertyBagPropertyDesc* RootDesc = PropertyBag->FindPropertyDescByName(SourcePath.GetSegment(FirstValidSegmentIndex).GetName());
 		if (!RootDesc)
 		{
@@ -53,7 +54,7 @@ public:
 			{
 				return MakeError(EPropertyBagResult::PropertyNotFound);
 			}
-			
+
 			if (const FStructProperty* StructProp = CastField<FStructProperty>(SubProperty))
 			{
 				CurrentView = FStructView(StructProp->Struct, static_cast<uint8*>(StructProp->ContainerPtrToValuePtr<void>(CurrentView.GetMemory())));
@@ -68,7 +69,7 @@ public:
 		void* CurrentViewMemory = CurrentView.GetMemory();
 		return MakeValue(*(static_cast<T*>(CurrentViewMemory)));
 	}
-	
+
 	template <typename T>
 	operator T() const
 	{
@@ -88,7 +89,7 @@ public:
 		return *this;
 	}
 
-	template<typename T>
+	template <typename T>
 	TValueOrError<T, EPropertyBagResult> GetValue() const
 	{
 		if (!HasBinding())
@@ -174,7 +175,6 @@ public:
 			case EPropertyBagPropertyType::Struct:
 			{
 				return GetNestedPropertyValue<T>();
-				break;
 			}
 			default:
 			{
@@ -186,7 +186,7 @@ public:
 	}
 
 	/* Not ready */
-	template<typename T>
+	template <typename T>
 	bool SetValue(const T& NewValue)
 	{
 		if (!HasBinding())

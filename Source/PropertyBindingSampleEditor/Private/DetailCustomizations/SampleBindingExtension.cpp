@@ -138,11 +138,7 @@ void FSampleBindingExtension::ExtendWidgetRow(FDetailWidgetRow& InWidgetRow, con
 	});
 	Args.OnRemoveBinding = FOnRemoveBinding::CreateLambda([SampleBindingData](FName InPropertyName)
 	{
-		SampleBindingData->PropertyBag = nullptr;
-		SampleBindingData->PropertyDescName = NAME_None;
-		SampleBindingData->PropertyDescValueType = EPropertyBagPropertyType::None;
-		SampleBindingData->Color = FLinearColor::White;
-		SampleBindingData->Image = nullptr;
+		SampleBindingData->RemoveBinding();
 	});
 	Args.OnCanRemoveBinding = FOnCanRemoveBinding::CreateLambda([](FName InPropertyName)
 	{
@@ -154,11 +150,11 @@ void FSampleBindingExtension::ExtendWidgetRow(FDetailWidgetRow& InWidgetRow, con
 	});
 	Args.CurrentBindingText = MakeAttributeLambda([SampleBindingData]()
 	{
-		return FText::FromName(SampleBindingData->PropertyDescName);
+		return SampleBindingData->GetBindingText();
 	});
 	Args.CurrentBindingToolTipText = MakeAttributeLambda([SampleBindingData]()
 	{
-		return FText::FromName(SampleBindingData->PropertyDescName);
+		return SampleBindingData->GetBindingText();
 	});
 	Args.CurrentBindingImage = MakeAttributeLambda([SampleBindingData]() -> const FSlateBrush*
 	{
@@ -179,7 +175,7 @@ void FSampleBindingExtension::ExtendWidgetRow(FDetailWidgetRow& InWidgetRow, con
 	Args.bAllowUObjectFunctions = false;        // Disallow UObject functions
 	Args.bAllowStructFunctions = false;         // Disallow struct functions
 	Args.bAllowStructMemberBindings = true;     // Allow struct member bindings
-
+	
 	TAttribute<bool> bOriginValueContentWidgetEnabled = TAttribute<bool>::Create(TAttribute<bool>::FGetter::CreateLambda([SampleBindingData]() -> bool
 	{
 		if (SampleBindingData != nullptr)
@@ -189,6 +185,7 @@ void FSampleBindingExtension::ExtendWidgetRow(FDetailWidgetRow& InWidgetRow, con
 		return true;
 	}));
 	InWidgetRow.ValueContent().Widget->SetEnabled(bOriginValueContentWidgetEnabled);
+	
 	// Customize the header row in the Details Panel to include the PropertyAccessEditor widget
 	InWidgetRow.ExtensionContent()
 	[

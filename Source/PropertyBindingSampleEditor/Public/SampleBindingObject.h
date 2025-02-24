@@ -16,8 +16,9 @@ class PROPERTYBINDINGSAMPLEEDITOR_API USampleBindingObject : public UObject
 		: TestFloatValue(0.114)
 		, TestInt32Value(514)
 		, TestBoolValue(true)
+		, TestVectorValue(FVector(11.22, 22.33, 33.44))
 	{
-		Parameters.AddProperty(TEXT("TestFloat"), EPropertyBagPropertyType::Float);
+		Parameters.AddProperty(TEXT("TestFloat"), EPropertyBagPropertyType::Double);
 		Parameters.SetValueFloat(TEXT("TestFloat"), 123.123);
 
 		Parameters.AddProperty(TEXT("TestInt32"), EPropertyBagPropertyType::Int32);
@@ -27,7 +28,7 @@ class PROPERTYBINDINGSAMPLEEDITOR_API USampleBindingObject : public UObject
 		Parameters.SetValueBool(TEXT("TestBool"), true);
 
 		Parameters.AddProperty(TEXT("TestVector"), EPropertyBagPropertyType::Struct, TBaseStructure<FVector>::Get());
-		Parameters.SetValueStruct(TEXT("TestVector"), FVector(1.11,22.2,3.33));
+		Parameters.SetValueStruct(TEXT("TestVector"), FVector(1.11, 22.2, 3.33));
 	}
 
 public:
@@ -36,7 +37,7 @@ public:
 
 private:
 	UPROPERTY(EditAnywhere)
-	float TestFloatValue;
+	double TestFloatValue;
 	UPROPERTY()
 	FSampleBindingData TestFloatValueBindingData;
 
